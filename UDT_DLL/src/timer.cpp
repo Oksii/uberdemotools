@@ -296,7 +296,9 @@ void udtTimer::SetElapsedUs(u64 uElapsedUs)
 #if defined(_DEBUG)
 
 
+#if defined(UDT_ARCH_X86)
 #include <immintrin.h>
+#endif
 
 
 void MicroSleep(u64 microSeconds)
@@ -305,7 +307,11 @@ void MicroSleep(u64 microSeconds)
 	timer.Start();
 	while(timer.GetElapsedUs() < microSeconds)
 	{
+#if defined(UDT_ARCH_X86)
 		_mm_pause();
+#elif defined(__aarch64__)
+		__asm__ __volatile__("yield");
+#endif
 	}
 }
 

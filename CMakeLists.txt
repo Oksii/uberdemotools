@@ -20,7 +20,8 @@ add_library(udt_core OBJECT ${UDT_CORE_SOURCES})
 set_target_properties(udt_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(udt_core PUBLIC ${UDT_DIR}/include ${UDT_DIR}/src ${UDT_DIR}/src/apps)
 target_compile_definitions(udt_core PUBLIC UDT_CREATE_DLL $<$<CONFIG:Debug>:DEBUG> $<$<CONFIG:Debug>:_DEBUG>)
-target_compile_options(udt_core PUBLIC -fno-rtti -fno-exceptions -Wno-invalid-offsetof -Wno-narrowing)
+# -fsigned-char: ARM defaults to unsigned char, the code was written for x86.
+target_compile_options(udt_core PUBLIC -fno-rtti -fno-exceptions -fsigned-char -Wno-invalid-offsetof -Wno-narrowing)
 target_link_libraries(udt_core PUBLIC Threads::Threads rt)
 
 add_library(UDT SHARED)

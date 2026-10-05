@@ -58,14 +58,14 @@ static_assert(sizeof(s64) == 8, "sizeof(s64) must be 8");
 static_assert(sizeof(u64) == 8, "sizeof(u64) must be 8");
 static_assert(sizeof(f32) == 4, "sizeof(f32) must be 4");
 static_assert(sizeof(f64) == 8, "sizeof(f64) must be 8");
-#if defined(UDT_X64)
-static_assert(sizeof(sptr) == 8, "sizeof(sptr) must be 8");
-static_assert(sizeof(uptr) == 8, "sizeof(uptr) must be 8");
-static_assert(sizeof(void*) == 8, "sizeof(void*) must be 8");
-#else
+#if defined(UDT_X86)
 static_assert(sizeof(sptr) == 4, "sizeof(sptr) must be 4");
 static_assert(sizeof(uptr) == 4, "sizeof(uptr) must be 4");
 static_assert(sizeof(void*) == 4, "sizeof(void*) must be 4");
+#else
+static_assert(sizeof(sptr) == 8, "sizeof(sptr) must be 8");
+static_assert(sizeof(uptr) == 8, "sizeof(uptr) must be 8");
+static_assert(sizeof(void*) == 8, "sizeof(void*) must be 8");
 #endif
 
 static_assert(udtPlayerMeanOfDeath::Count < udtMeanOfDeath::Count, "Invalid MOD KillType filter");
