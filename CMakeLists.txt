@@ -11,6 +11,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+option(UDT_STATIC "Link the command-line tools statically" OFF)
+
 find_package(Threads REQUIRED)
 
 set(UDT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/UDT_DLL)
@@ -30,6 +32,9 @@ target_link_libraries(UDT PUBLIC udt_core)
 function(udt_app name source)
 	add_executable(${name} ${UDT_DIR}/src/apps/${source} ${UDT_DIR}/src/apps/shared.cpp)
 	target_link_libraries(${name} PRIVATE udt_core)
+	if(UDT_STATIC)
+		target_link_options(${name} PRIVATE -static)
+	endif()
 endfunction()
 
 udt_app(UDT_cutter app_demo_cutter.cpp)
