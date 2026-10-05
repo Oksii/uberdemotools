@@ -17,17 +17,20 @@ void PrintHelp()
 {
 	printf("Converts demos from one protocol to another.\n");
 	printf("\n");
-	printf("UDT_converter [-o=outputfolder] [-q] [-t=maxthreads] [-r] -p=protocol inputfile|inputfolder\n");
+	printf("UDT_converter [-o=outputfolder] [-q] [-t=maxthreads] [-r] [-cn=clientnum] -p=protocol inputfile|inputfolder\n");
 	printf("\n");
 	printf("-q    quiet mode: no logging to stdout        (default: off)\n");
 	printf("-o=p  set the output folder path to p         (default: the input's folder)\n");
 	printf("-r    enable recursive demo file search       (default: off)\n");
 	printf("-t=N  set the maximum number of threads to N  (default: 1)\n");
+	printf("-cn=N keep the point of view of client N      (required for -p=84)\n");
 	printf("-p=N  set the output protocol version to N\n");
 	printf("        N=68  output to .dm_68 files\n");
 	printf("              supported input: .dm3 and .dm_48\n");
 	printf("        N=91  output to .dm_91 files\n");
 	printf("              supported input: .dm_73 and .dm_90\n");
+	printf("        N=84  output to .dm_84 files\n");
+	printf("              supported input: .tv_84\n");
 }
 
 static bool IsValidConversion(udtProtocol::Id input, udtProtocol::Id output)
@@ -51,13 +54,13 @@ struct Config
 		CustomOutputFolder = NULL;
 		MaxThreadCount = 1;
 		OutputProtocol = udtProtocol::Invalid;
-		clientNum = -1;
+		ClientNum = -1;
 	}
 
 	const char* CustomOutputFolder;
 	u32 MaxThreadCount;
 	udtProtocol::Id OutputProtocol;
-	u32 clientNum;
+	s32 ClientNum;
 };
 
 static bool ConvertDemoBatch(udtParseArg& parseArg, const udtFileInfo* files, u32 fileCount, const Config& config)
@@ -81,7 +84,7 @@ static bool ConvertDemoBatch(udtParseArg& parseArg, const udtFileInfo* files, u3
 	udtProtocolConversionArg conversionArg;
 	memset(&conversionArg, 0, sizeof(conversionArg));
 	conversionArg.OutputProtocol = (u32)config.OutputProtocol;
-	conversionArg.ClientNum = config.clientNum;
+	conversionArg.ClientNum = (u32)config.ClientNum;
 
 	const s32 result = udtConvertDemoFiles(&parseArg, &threadInfo, &conversionArg);
 
@@ -203,13 +206,20 @@ int udt_main(int argc, char** argv)
 				arg.GetLength() >= 5 &&
 				StringParseInt(localClientNum, arg.GetPtr() + 4))
 		{
-			config.clientNum = localClientNum;
+			config.ClientNum = localClientNum;
 		}
 	}
 
 	if(config.OutputProtocol == udtProtocol::Invalid)
 	{
 		fprintf(stderr, "Invalid or unspecified output protocol number.\n");
+		return 1;
+	}
+
+	if(config.OutputProtocol == udtProtocol::Dm84 &&
+	   (config.ClientNum < 0 || config.ClientNum >= ID_MAX_CLIENTS))
+	{
+		fprintf(stderr, "Converting to protocol 84 requires -cn=N with N from 0 to %d.\n", ID_MAX_CLIENTS - 1);
 		return 1;
 	}
 
