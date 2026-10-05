@@ -35,7 +35,8 @@ static bool IsValidConversion(udtProtocol::Id input, udtProtocol::Id output)
 	if((output == udtProtocol::Dm91 && input == udtProtocol::Dm73) ||
 	   (output == udtProtocol::Dm91 && input == udtProtocol::Dm90) ||
 	   (output == udtProtocol::Dm68 && input == udtProtocol::Dm3) ||
-	   (output == udtProtocol::Dm68 && input == udtProtocol::Dm48))
+	   (output == udtProtocol::Dm68 && input == udtProtocol::Dm48) ||
+	   (output == udtProtocol::Dm84 && input == udtProtocol::Dm284))
 	{
 		return true;
 	}
@@ -50,11 +51,13 @@ struct Config
 		CustomOutputFolder = NULL;
 		MaxThreadCount = 1;
 		OutputProtocol = udtProtocol::Invalid;
+		clientNum = -1;
 	}
 
 	const char* CustomOutputFolder;
 	u32 MaxThreadCount;
 	udtProtocol::Id OutputProtocol;
+	u32 clientNum;
 };
 
 static bool ConvertDemoBatch(udtParseArg& parseArg, const udtFileInfo* files, u32 fileCount, const Config& config)
@@ -78,6 +81,7 @@ static bool ConvertDemoBatch(udtParseArg& parseArg, const udtFileInfo* files, u3
 	udtProtocolConversionArg conversionArg;
 	memset(&conversionArg, 0, sizeof(conversionArg));
 	conversionArg.OutputProtocol = (u32)config.OutputProtocol;
+	conversionArg.ClientNum = config.clientNum;
 
 	const s32 result = udtConvertDemoFiles(&parseArg, &threadInfo, &conversionArg);
 
@@ -158,6 +162,7 @@ int udt_main(int argc, char** argv)
 	{
 		s32 localMaxThreads = 1;
 		s32 localProtocol = (s32)udtProtocol::Invalid;
+		s32 localClientNum = -1;
 		const udtString arg = udtString::NewConstRef(argv[i]);
 		if(udtString::StartsWith(arg, "-p=") &&
 		   arg.GetLength() >= 4 &&
@@ -170,6 +175,10 @@ int udt_main(int argc, char** argv)
 			else if(localProtocol == 91)
 			{
 				config.OutputProtocol = udtProtocol::Dm91;
+			}
+			else if(localProtocol == 84)
+			{
+				config.OutputProtocol = udtProtocol::Dm84;
 			}
 		}
 		else if(udtString::Equals(arg, "-r"))
@@ -189,6 +198,12 @@ int udt_main(int argc, char** argv)
 				localMaxThreads <= 16)
 		{
 			config.MaxThreadCount = (u32)localMaxThreads;
+		}
+		else if(udtString::StartsWith(arg, "-cn=") &&
+				arg.GetLength() >= 5 &&
+				StringParseInt(localClientNum, arg.GetPtr() + 4))
+		{
+			config.clientNum = localClientNum;
 		}
 	}
 

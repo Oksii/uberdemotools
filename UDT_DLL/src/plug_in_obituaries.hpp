@@ -18,6 +18,7 @@ public:
 	void InitAllocators(u32 demoCount) override
 	{
 		Analyzer.InitAllocators(demoCount, *TempAllocator);
+		//_analyzer.InitAllocators(*TempAllocator, demoCount);
 	}
 
 	void CopyBuffersStruct(void* buffersStruct) const override
@@ -42,24 +43,29 @@ public:
 	void StartDemoAnalysis() override
 	{
 		Analyzer.ResetForNextDemo();
+		//_analyzer.ResetForNextDemo();
 	}
 
 	void ProcessSnapshotMessage(const udtSnapshotCallbackArg& arg, udtBaseParser& parser) override
 	{
 		Analyzer.ProcessSnapshotMessage(arg, parser);
+		//_analyzer.ProcessSnapshotMessage(arg, parser);
 	}
 
 	void ProcessGamestateMessage(const udtGamestateCallbackArg& arg, udtBaseParser& parser) override
 	{
 		Analyzer.ProcessGamestateMessage(arg, parser);
+		//_analyzer.ProcessGamestateMessage(arg, parser);
 	}
 
 	void ProcessCommandMessage(const udtCommandCallbackArg& arg, udtBaseParser& parser) override
 	{
 		Analyzer.ProcessCommandMessage(arg, parser);
+		//_analyzer.ProcessCommandMessage(arg, parser);
 	}
 
 	udtObituariesAnalyzer Analyzer;
+	udtGeneralAnalyzer _analyzer;
 
 private:
 	UDT_NO_COPY_SEMANTICS(udtParserPlugInObituaries);
