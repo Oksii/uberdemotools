@@ -59,27 +59,29 @@ udtFragRunPatternAnalyzer::~udtFragRunPatternAnalyzer()
 void udtFragRunPatternAnalyzer::ProcessGamestateMessage(const udtGamestateCallbackArg& arg, udtBaseParser& parser)
 {
 	_analyzer.ProcessGamestateMessage(arg, parser);
-	//_generalAnalyzer.ProcessGamestateMessage(arg, parser);
+	_generalAnalyzer.ProcessGamestateMessage(arg, parser);
 }
 
 void udtFragRunPatternAnalyzer::ProcessCommandMessage(const udtCommandCallbackArg& arg, udtBaseParser& parser)
 {
 	_analyzer.ProcessCommandMessage(arg, parser);
-	//_generalAnalyzer.ProcessCommandMessage(arg, parser);
+	_generalAnalyzer.ProcessCommandMessage(arg, parser);
 }
 
 void udtFragRunPatternAnalyzer::ProcessSnapshotMessage(const udtSnapshotCallbackArg& arg, udtBaseParser& parser)
 {
 	_analyzer.ProcessSnapshotMessage(arg, parser);
-	//_generalAnalyzer.ProcessSnapshotMessage(arg, parser);
+	_generalAnalyzer.ProcessSnapshotMessage(arg, parser);
 	const u32 obituaryCount = _analyzer.Obituaries.GetSize();
 	if(obituaryCount == 0)
 	{
 		return;
 	}
 
-	if (!_generalAnalyzer.IsMatchInProgress())
+	// Drop warm-up frags instead of keeping them around until the match starts.
+	if(!_generalAnalyzer.IsMatchInProgress())
 	{
+		_analyzer.Obituaries.Clear();
 		return;
 	}
 
@@ -154,11 +156,13 @@ void udtFragRunPatternAnalyzer::ProcessSnapshotMessage(const udtSnapshotCallback
 void udtFragRunPatternAnalyzer::InitAllocators(u32 demoCount)
 {
 	_analyzer.InitAllocators(demoCount, PlugIn->GetTempAllocator());
+	_generalAnalyzer.InitAllocators(PlugIn->GetTempAllocator(), demoCount);
 }
 
 void udtFragRunPatternAnalyzer::StartAnalysis()
 {
 	_frags.Clear();
+	_generalAnalyzer.ResetForNextDemo();
 }
 
 void udtFragRunPatternAnalyzer::FinishAnalysis()
