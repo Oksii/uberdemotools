@@ -1013,7 +1013,8 @@ bool udtBaseParser::ParsePlayerstates()
 		}
 	}
 
-	if (ShouldWriteMessage() && GetTvSnapshot(newSnap, _inProtocol, _protocolConverter->ConversionInfo->ClientNum)->valid)
+	if (ShouldWriteMessage() && _snapshotPosition == udtSnapshotPosition::InValidRange &&
+		GetTvSnapshot(newSnap, _inProtocol, _protocolConverter->ConversionInfo->ClientNum)->valid)
 	{
 		idLargestClientSnapshot oldSnapOutProto;
 		idLargestClientSnapshot newSnapOutProto;
