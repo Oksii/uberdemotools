@@ -114,6 +114,12 @@ static bool IsValid(const udtMultiParseArg& arg)
 
 static bool IsValid(const udtProtocolConversionArg& arg)
 {
+	if(arg.OutputProtocol == (u32)udtProtocol::Dm84)
+	{
+		// Indexes the per-client ETTV snapshots.
+		return arg.ClientNum < ID_MAX_CLIENTS;
+	}
+
 	return arg.OutputProtocol == (u32)udtProtocol::Dm68 || arg.OutputProtocol == (u32)udtProtocol::Dm91;
 }
 

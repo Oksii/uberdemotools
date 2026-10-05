@@ -14,6 +14,23 @@ The main features are:
 - Converting demos: convert demos to a different protocol version
 - Viewing Q3 and QL demos with the 2D demo viewer (top-down view)
 
+Fork Notes
+----------
+
+This fork adds **Wolfenstein: Enemy Territory** support on top of upstream `develop`:
+
+- `.dm_84` client demos (ET 2.60b, ET: Legacy, ETPro) and `.tv_84` ETTV / ETLTV demos (protocol 284)
+- ET configstrings, obituaries, scores, chat and stats commands (ET: Legacy, ETPro)
+- Converting an ETTV demo to a regular demo from one player's point of view:  
+  `UDT_converter -p=84 -cn=<client number> demo.tv_84`
+- `.tv_84` demos are read-only: analyze or convert them, cut the converted `.dm_84`
+- CMake build for Linux x86_64 and aarch64:  
+  `cmake -S . -B build && cmake --build build -j`  
+  Add `-DUDT_STATIC=ON` for self-contained tools that run on any distro (no glibc version dependency).
+
+The ET work is by [ryzyk-krzysiek](https://github.com/mightycow/uberdemotools/pull/2) and [mittermichal](https://github.com/mittermichal/uberdemotools/tree/ET-Protocol-kimi).  
+The official releases below are upstream builds and don't include it.
+
 Official Releases
 -----------------
 

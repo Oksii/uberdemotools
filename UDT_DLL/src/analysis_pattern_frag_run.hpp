@@ -3,6 +3,7 @@
 
 #include "analysis_obituaries.hpp"
 #include "analysis_pattern_base.hpp"
+#include "analysis_general.hpp"
 
 
 struct udtFragRunPatternAnalyzer : public udtPatternSearchAnalyzerBase
@@ -32,4 +33,5 @@ private:
 
 	udtVMArray<Frag> _frags { "CutByFragAnalyzer::FragsArray" };
 	udtObituariesAnalyzer _analyzer;
+	udtGeneralAnalyzer _generalAnalyzer;
 };
