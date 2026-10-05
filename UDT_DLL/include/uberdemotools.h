@@ -149,7 +149,7 @@ struct udtErrorCode
 	N(84, ".dm_84", "ET 2.6b",           udtProtocolFlags::ET) \
 	N(90, ".dm_90", "Quake Live",        udtProtocolFlags::QuakeLive) \
 	N(91, ".dm_91", "Quake Live",        udtProtocolFlags::QuakeLive) \
-	N(284, ".tv_84", "ETTV",             udtProtocolFlags::ET) \
+	N(284, ".tv_84", "ETTV",             udtProtocolFlags::ET | udtProtocolFlags::ReadOnly) \
 
 #define UDT_PROTOCOL_ITEM(Number, Ext, Desc, Flags) Dm##Number,
 struct udtProtocol
