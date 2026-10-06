@@ -44,13 +44,14 @@ udt_app(UDT_merger app_demo_merger.cpp)
 udt_app(UDT_json app_demo_json.cpp)
 udt_app(UDT_captures app_demo_captures.cpp)
 udt_app(UDT_converter app_demo_converter.cpp)
+udt_app(UDT_tracks app_demo_tracks.cpp)
 
 foreach(tut tut_players tut_multi_rail)
 	add_executable(${tut} ${UDT_DIR}/src/apps/${tut}.cpp)
 	target_link_libraries(${tut} PRIVATE UDT)
 endforeach()
 
-install(TARGETS UDT UDT_cutter UDT_splitter UDT_timeshifter UDT_merger UDT_json UDT_captures UDT_converter
+install(TARGETS UDT UDT_cutter UDT_splitter UDT_timeshifter UDT_merger UDT_json UDT_captures UDT_converter UDT_tracks
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION lib)
 install(FILES ${UDT_DIR}/include/uberdemotools.h DESTINATION include)
