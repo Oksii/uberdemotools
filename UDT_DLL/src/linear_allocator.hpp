@@ -5,8 +5,14 @@
 #include "intrusive_list.hpp"
 
 
+// aarch64 kernels run 4, 16 or 64 KiB pages (the Raspberry Pi 5's are 16),
+// and committing in 64 KiB steps is page aligned on all of them.
+#if defined(__aarch64__)
+#define    UDT_MEMORY_PAGE_SIZE    65536
+#else
 #define    UDT_MEMORY_PAGE_SIZE    4096
-#define    UDT_KB(x)               (x << 10)
+#endif
+#define    UDT_KB(x)              (x << 10)
 #define    UDT_MB(x)               (x << 20)
 #define    UDT_GB(x)               (x << 30)
 
