@@ -7,6 +7,7 @@
 #include "file_system.hpp"
 #include "look_up_tables.hpp"
 
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,11 +16,18 @@
 #define    UDT_TRACKS_DEFAULT_RATE_MS    250
 #define    UDT_TRACKS_PM_NORMAL          0
 #define    UDT_TRACKS_PM_SPECTATOR       2
+// ET: Legacy trType_t values (bg_public.h), not Quake 3's.
+#define    UDT_TRACKS_TR_STATIONARY      0
+#define    UDT_TRACKS_TR_LINEAR          2
+#define    UDT_TRACKS_TR_GRAVITY         6
+#define    UDT_TRACKS_TR_GRAVITY_LOW     7
+#define    UDT_TRACKS_TR_GRAVITY_FLOAT   8
+#define    UDT_TRACKS_GRAVITY            800
 
 
 void PrintHelp()
 {
-	printf("Exports player tracks, kills and bullet impacts of an ETTV demo to JSON.\n");
+	printf("Exports player tracks, kills and missile flights of an ETTV demo to JSON.\n");
 	printf("\n");
 	printf("UDT_tracks [-o=outputfolder] [-q] [-r=ms] inputfile\n");
 	printf("\n");
@@ -53,14 +61,21 @@ struct TrackKill
 	bool HasAttackerOrigin;
 };
 
-struct TrackShot
+struct TrackMissile
 {
-	s32 Time;
-	s32 Shooter;
-	s32 Target; // -1 when no player was hit
-	s32 Origin[3];
+	s32 SpawnTime;
+	s32 Slot;
 	s32 Weapon;
-	s32 Hit; // 0 none, 1 team, 2 head, 3 body
+	s32 EndTime;
+	s32 End[3];
+};
+
+// A point a missile's flight passed: its spawn, and every bounce or stop.
+struct TrackMissilePoint
+{
+	u32 Missile;
+	s32 Time;
+	s32 Origin[3];
 };
 
 struct TrackPhase
@@ -92,7 +107,12 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 		_nextSampleTime = UDT_S32_MIN;
 		_lastPhase = UDT_S32_MIN;
 		_newSnapshot = false;
+		_snapshotCount = 0;
 		_map = udtString::NewEmptyConstant();
+		for(s32 i = 0; i < MAX_GENTITIES; ++i)
+		{
+			_activeMissile[i] = -1;
+		}
 	}
 
 	void InitAllocators(u32 /*demoCount*/) override
@@ -145,8 +165,7 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 		_newSnapshot = true;
 
 		const udtProtocol::Id protocol = parser._inProtocol;
-		const s32 eventType = GetIdNumber(udtMagicNumberType::EntityType, udtEntityType::Event, protocol, parser._inMod);
-		const s32 bulletEvent = GetIdNumber(udtMagicNumberType::EntityEvent, udtEntityEvent::Wolf_Bullet, protocol, parser._inMod);
+		TrackMissiles(arg, GetIdNumber(udtMagicNumberType::EntityType, udtEntityType::Missile, protocol, parser._inMod));
 		for(u32 i = 0; i < arg.ChangedEntityCount; ++i)
 		{
 			if(!arg.ChangedEntities[i].IsNewEvent)
@@ -166,19 +185,6 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 				kill.MeanOfDeath = obituary.MeanOfDeath;
 				CopyOrigin(kill.VictimOrigin, entity.pos.trBase);
 				_pendingKills.Add(kill);
-				continue;
-			}
-
-			if(bulletEvent != UDT_S32_MIN && (entity.eType & ~ID_ES_EVENT_BITS) == eventType + bulletEvent)
-			{
-				TrackShot shot;
-				shot.Time = RelativeTime(arg.ServerTime);
-				shot.Shooter = entity.otherEntityNum;
-				shot.Target = entity.otherEntityNum2 >= 0 && entity.otherEntityNum2 < ID_MAX_CLIENTS ? entity.otherEntityNum2 : -1;
-				CopyOrigin(shot.Origin, entity.pos.trBase);
-				shot.Weapon = entity.weapon;
-				shot.Hit = entity.modelindex;
-				_shots.Add(shot);
 			}
 		}
 	}
@@ -239,6 +245,18 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 		}
 	}
 
+	// Missiles still in flight when the demo ends stop where they were last seen.
+	void Finish()
+	{
+		for(s32 n = 0; n < MAX_GENTITIES; ++n)
+		{
+			if(_activeMissile[n] >= 0)
+			{
+				EndMissileWhereLastSeen(n);
+			}
+		}
+	}
+
 	bool Write(const char* filePath) const
 	{
 		FILE* const file = fopen(filePath, "wb");
@@ -247,7 +265,7 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 			return false;
 		}
 
-		fprintf(file, "{\"v\":1,\"map\":");
+		fprintf(file, "{\"v\":2,\"map\":");
 		WriteString(file, _map.GetPtr());
 		fprintf(file, ",\"rate_ms\":%d,\"phases\":[", _rateMs);
 		for(u32 i = 0, count = _phases.GetSize(); i < count; ++i)
@@ -309,12 +327,23 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 			fprintf(file, "%d,%d,%d,\"%s\"]", k.VictimOrigin[0], k.VictimOrigin[1], k.VictimOrigin[2], GetUDTModName((s32)k.MeanOfDeath));
 		}
 
-		fprintf(file, "],\"shots\":[");
-		for(u32 i = 0, count = _shots.GetSize(); i < count; ++i)
+		fprintf(file, "],\"missiles\":[");
+		for(u32 i = 0, count = _missiles.GetSize(); i < count; ++i)
 		{
-			const TrackShot& s = _shots[i];
-			fprintf(file, "%s[%d,%d,%d,%d,%d,%d,%d,%d]", i ? "," : "",
-					s.Time, s.Shooter, s.Target, s.Origin[0], s.Origin[1], s.Origin[2], s.Weapon, s.Hit);
+			const TrackMissile& m = _missiles[i];
+			fprintf(file, "%s[%d,%d,%d,[", i ? "," : "", m.SpawnTime, m.Slot, m.Weapon);
+			bool firstPoint = true;
+			for(u32 j = 0, pointCount = _missilePoints.GetSize(); j < pointCount; ++j)
+			{
+				const TrackMissilePoint& p = _missilePoints[j];
+				if(p.Missile != i)
+				{
+					continue;
+				}
+				fprintf(file, "%s[%d,%d,%d,%d]", firstPoint ? "" : ",", p.Time, p.Origin[0], p.Origin[1], p.Origin[2]);
+				firstPoint = false;
+			}
+			fprintf(file, "],[%d,%d,%d,%d]]", m.EndTime, m.End[0], m.End[1], m.End[2]);
 		}
 		fprintf(file, "]}\n");
 
@@ -323,7 +352,7 @@ struct udtParserPlugInTracks : udtBaseParserPlugIn
 
 	u32 GetSampleCount() const { return _samples.GetSize(); }
 	u32 GetKillCount() const { return _kills.GetSize(); }
-	u32 GetShotCount() const { return _shots.GetSize(); }
+	u32 GetMissileCount() const { return _missiles.GetSize(); }
 
 private:
 	s32 RelativeTime(s32 serverTime) const
@@ -339,6 +368,132 @@ private:
 		}
 
 		return (const idPlayerState84*)GetTvPlayerState(snapshot, udtProtocol::Dm284, slot);
+	}
+
+	// A missile keeps its entity number from spawn to blast. Each new trajectory (the
+	// throw, a bounce, coming to rest) is a point of its path; at the blast the entity
+	// turns into a general one at the explosion's origin.
+	void TrackMissiles(const udtSnapshotCallbackArg& arg, s32 missileType)
+	{
+		++_snapshotCount;
+		const s32 time = RelativeTime(arg.ServerTime);
+		for(u32 i = 0; i < arg.EntityCount; ++i)
+		{
+			const idEntityStateBase& es = *arg.Entities[i];
+			const s32 n = es.number;
+			if(n < 0 || n >= MAX_GENTITIES)
+			{
+				continue;
+			}
+
+			const s32 active = _activeMissile[n];
+			const bool isMissile = es.eType == missileType && es.clientNum >= 0 && es.clientNum < ID_MAX_CLIENTS;
+			if(!isMissile)
+			{
+				if(active >= 0)
+				{
+					s32 origin[3];
+					CopyOrigin(origin, es.pos.trBase);
+					EndMissile(n, time, origin);
+				}
+				continue;
+			}
+
+			if(active >= 0 && es.weapon != _missiles[active].Weapon)
+			{
+				EndMissileWhereLastSeen(n);
+			}
+
+			if(_activeMissile[n] < 0)
+			{
+				TrackMissile missile;
+				missile.SpawnTime = RelativeTime(es.pos.trTime);
+				missile.Slot = es.clientNum;
+				missile.Weapon = es.weapon;
+				missile.EndTime = 0;
+				memset(missile.End, 0, sizeof(missile.End));
+				_activeMissile[n] = (s32)_missiles.GetSize();
+				_missiles.Add(missile);
+				AddMissilePoint(n, es.pos, time);
+			}
+			else if(TrajectoryChanged(_lastTrajectory[n], es.pos))
+			{
+				AddMissilePoint(n, es.pos, time);
+			}
+			_lastTrajectory[n] = es.pos;
+			_lastSeenTime[n] = arg.ServerTime;
+			_lastSeenSnapshot[n] = _snapshotCount;
+		}
+
+		// Freed without turning into an explosion first.
+		for(s32 n = 0; n < MAX_GENTITIES; ++n)
+		{
+			if(_activeMissile[n] >= 0 && _lastSeenSnapshot[n] != _snapshotCount)
+			{
+				EndMissileWhereLastSeen(n);
+			}
+		}
+	}
+
+	// A missile at rest has no trajectory time (G_SetOrigin zeroes it): it got there by this snapshot.
+	void AddMissilePoint(s32 number, const idTrajectoryBase& trajectory, s32 snapshotTime)
+	{
+		TrackMissilePoint point;
+		point.Missile = (u32)_activeMissile[number];
+		point.Time = (s32)trajectory.trType == UDT_TRACKS_TR_STATIONARY ? snapshotTime : RelativeTime(trajectory.trTime);
+		CopyOrigin(point.Origin, trajectory.trBase);
+		_missilePoints.Add(point);
+	}
+
+	void EndMissile(s32 number, s32 time, const s32* origin)
+	{
+		TrackMissile& missile = _missiles[(u32)_activeMissile[number]];
+		missile.EndTime = time;
+		memcpy(missile.End, origin, sizeof(missile.End));
+		_activeMissile[number] = -1;
+	}
+
+	void EndMissileWhereLastSeen(s32 number)
+	{
+		s32 origin[3];
+		EvaluateTrajectory(origin, _lastTrajectory[number], _lastSeenTime[number]);
+		EndMissile(number, RelativeTime(_lastSeenTime[number]), origin);
+	}
+
+	static bool TrajectoryChanged(const idTrajectoryBase& a, const idTrajectoryBase& b)
+	{
+		return a.trType != b.trType || a.trTime != b.trTime ||
+			a.trBase[0] != b.trBase[0] || a.trBase[1] != b.trBase[1] || a.trBase[2] != b.trBase[2] ||
+			a.trDelta[0] != b.trDelta[0] || a.trDelta[1] != b.trDelta[1] || a.trDelta[2] != b.trDelta[2];
+	}
+
+	// BG_EvaluateTrajectory for the trajectory types a missile flies on, in integer
+	// micro-units: the server snaps a missile's trBase and trDelta to whole units, so
+	// this is exact and x86 and aarch64 write the same numbers.
+	static void EvaluateTrajectory(s32* result, const idTrajectoryBase& tr, s32 atTime)
+	{
+		s64 halfGravity = 0;
+		switch((s32)tr.trType)
+		{
+			case UDT_TRACKS_TR_GRAVITY: halfGravity = UDT_TRACKS_GRAVITY / 2; break;
+			case UDT_TRACKS_TR_GRAVITY_LOW: halfGravity = UDT_TRACKS_GRAVITY * 3 / 20; break;
+			case UDT_TRACKS_TR_LINEAR:
+			case UDT_TRACKS_TR_GRAVITY_FLOAT: break;
+			default:
+				CopyOrigin(result, tr.trBase);
+				return;
+		}
+		const s64 dtMs = (s64)atTime - (s64)tr.trTime;
+		for(u32 i = 0; i < 3; ++i)
+		{
+			s64 micro = (s64)floor(tr.trBase[i] + 0.5f) * 1000000 + (s64)floor(tr.trDelta[i] + 0.5f) * dtMs * 1000;
+			if(i == 2)
+			{
+				micro -= halfGravity * dtMs * dtMs;
+			}
+			micro += 500000;
+			result[i] = (s32)(micro >= 0 ? micro / 1000000 : -((-micro + 999999) / 1000000));
+		}
 	}
 
 	void UpdatePhase(udtBaseParser& parser)
@@ -429,7 +584,8 @@ private:
 	udtVMArray<TrackSample> _samples { "Tracks::Samples" };
 	udtVMArray<TrackKill> _kills { "Tracks::Kills" };
 	udtVMArray<TrackKill> _pendingKills { "Tracks::PendingKills" };
-	udtVMArray<TrackShot> _shots { "Tracks::Shots" };
+	udtVMArray<TrackMissile> _missiles { "Tracks::Missiles" };
+	udtVMArray<TrackMissilePoint> _missilePoints { "Tracks::MissilePoints" };
 	udtVMArray<TrackPhase> _phases { "Tracks::Phases" };
 	udtVMArray<TrackName> _names { "Tracks::Names" };
 	udtString _map;
@@ -437,7 +593,12 @@ private:
 	s32 _startTime;
 	s32 _nextSampleTime;
 	s32 _lastPhase;
+	s32 _snapshotCount;
 	bool _newSnapshot;
+	s32 _activeMissile[MAX_GENTITIES]; // Index into _missiles of the missile flying as this entity, or -1.
+	idTrajectoryBase _lastTrajectory[MAX_GENTITIES];
+	s32 _lastSeenTime[MAX_GENTITIES];
+	s32 _lastSeenSnapshot[MAX_GENTITIES];
 };
 
 static bool ExportTracks(const char* inputPath, const char* outputFolder, s32 rateMs)
@@ -485,6 +646,7 @@ static bool ExportTracks(const char* inputPath, const char* outputFolder, s32 ra
 		return false;
 	}
 
+	plugIn.Finish();
 	if(!plugIn.Write(outputPath.GetPtr()))
 	{
 		fprintf(stderr, "Failed to write %s\n", outputPath.GetPtr());
@@ -492,7 +654,7 @@ static bool ExportTracks(const char* inputPath, const char* outputFolder, s32 ra
 	}
 
 	char message[512];
-	sprintf(message, "Wrote %s: %u samples, %u kills, %u shots", outputPath.GetPtr(), plugIn.GetSampleCount(), plugIn.GetKillCount(), plugIn.GetShotCount());
+	sprintf(message, "Wrote %s: %u samples, %u kills, %u missiles", outputPath.GetPtr(), plugIn.GetSampleCount(), plugIn.GetKillCount(), plugIn.GetMissileCount());
 	CallbackConsoleMessage(0, message);
 
 	return true;

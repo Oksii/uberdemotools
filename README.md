@@ -24,7 +24,7 @@ This fork adds **Wolfenstein: Enemy Territory** support on top of upstream `deve
 - Converting an ETTV demo to a regular demo from one player's point of view:  
   `UDT_converter -p=84 -cn=<client number> demo.tv_84`
 - `.tv_84` demos are read-only: analyze or convert them, cut the converted `.dm_84`
-- Exporting an ETTV demo's player tracks (4 Hz), kills with both positions and bullet impacts to JSON:  
+- Exporting an ETTV demo's player tracks (4 Hz), kills with both positions and missile flights (every bounce, to the blast) to JSON:  
   `UDT_tracks [-r=ms] demo.tv_84`
 - CMake build for Linux x86_64 and aarch64:  
   `cmake -S . -B build && cmake --build build -j`  
