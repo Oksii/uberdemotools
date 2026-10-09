@@ -521,11 +521,16 @@ tokenize:
 
 	if(ShouldWriteMessage())
 	{
-		if(csIndex >= 0 && commandStringLength >= MAX_STRING_CHARS)
+		// A string read stops after MAX_STRING_CHARS - 1 characters and leaves
+		// its terminator unread, which is then taken for the next command: a
+		// command goes out in one piece only when it is shorter than that, as
+		// the server's own are. A config string rebuilt from bcs commands can
+		// come to exactly MAX_STRING_CHARS - 1.
+		if(csIndex >= 0 && commandStringLength >= MAX_STRING_CHARS - 1)
 		{
 			WriteBigConfigStringCommand(tokenizer.GetArg(1), tokenizer.GetArg(2));
 		}
-		else if(commandStringLength < MAX_STRING_CHARS)
+		else if(commandStringLength < MAX_STRING_CHARS - 1)
 		{
 			_outMsg.WriteByte(svc_serverCommand);
 			_outMsg.WriteLong(_outServerCommandSequence);
