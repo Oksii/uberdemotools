@@ -182,6 +182,7 @@ public:
 	udtMessage _outMsg; // This instance *DOES* have ownership of the raw message data.
 	s32 _outServerCommandSequence;
 	s32 _outSnapshotsWritten;
+	s32 _outLastSnapshotMessageNum; // Protocol 284: the message the last snapshot written was in.
 	bool _outWriteFirstMessage;
 	bool _outWriteMessage;
 
