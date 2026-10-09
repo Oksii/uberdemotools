@@ -34,6 +34,7 @@ udtBaseParser::udtBaseParser()
 	_outFilePath = udtString::NewEmptyConstant();
 	_outServerCommandSequence = 0;
 	_outSnapshotsWritten = 0;
+	_outLastSnapshotMessageNum = UDT_S32_MIN;
 	_outWriteFirstMessage = false;
 	_outWriteMessage = false;
 }
@@ -112,6 +113,7 @@ void udtBaseParser::ResetForGamestateMessage()
 
 	_outServerCommandSequence = 0;
 	_outSnapshotsWritten = 0;
+	_outLastSnapshotMessageNum = UDT_S32_MIN;
 	_outWriteFirstMessage = false;
 	_outWriteMessage = false;
 
@@ -999,36 +1001,26 @@ bool udtBaseParser::ParsePlayerstates()
 		GetTvSnapshot(newSnap, _inProtocol, clientNum)->valid = true;
 	}
 
-	s32 oldMessageNum = newSnap->messageNum;
-	if (newSnap->messageNum - oldMessageNum >= PACKET_BACKUP)
-	{
-		oldMessageNum = newSnap->messageNum - (PACKET_BACKUP - 1);
-	}
-
-	for (; oldMessageNum < newSnap->messageNum; ++oldMessageNum)
-	{
-		for (s32 i = 0; i < ID_MAX_CLIENTS; i++)
-		{
-			GetTvSnapshot(GetClientSnapshot(oldMessageNum & PACKET_MASK), _inProtocol, i)->valid = false;
-		}
-	}
-
 	if (ShouldWriteMessage() && _snapshotPosition == udtSnapshotPosition::InValidRange &&
 		GetTvSnapshot(newSnap, _inProtocol, _protocolConverter->ConversionInfo->ClientNum)->valid)
 	{
 		idLargestClientSnapshot oldSnapOutProto;
 		idLargestClientSnapshot newSnapOutProto;
-		s32 deltaNum;
 
-		// did we write a snapshot already?
-		if (!_outSnapshotsWritten)
+		// Delta from the server's base only if this conversion wrote it. A
+		// snapshot without the client's player state was never written, and a
+		// delta from it would leave every later snapshot undecodable until the
+		// server sends a whole one, which a TV stream hardly ever does: one
+		// player's absence cost the rest of their map. Anything else is
+		// written whole.
+		s32 deltaNum = 0;
+		if (_outSnapshotsWritten > 0 && newSnap->deltaNum != -1 && newSnap->deltaNum == _outLastSnapshotMessageNum)
 		{
-			deltaNum = 0;
-			oldSnap = NULL;
+			deltaNum = newSnap->messageNum - newSnap->deltaNum;
 		}
 		else
 		{
-			deltaNum = newSnap->deltaNum == -1 ? 0 : newSnap->messageNum - newSnap->deltaNum;
+			oldSnap = NULL;
 		}
 
 		_outMsg.WriteByte(svc_snapshot);
@@ -1040,15 +1032,16 @@ bool udtBaseParser::ParsePlayerstates()
 
 		_protocolConverter->StartSnapshot(newSnap->serverTime);
 
-		if (oldSnap && GetTvSnapshot(oldSnap, _inProtocol, _protocolConverter->ConversionInfo->ClientNum)->valid)
+		if (oldSnap)
 		{
 			_protocolConverter->ConvertSnapshot(oldSnapOutProto, *oldSnap);
 		}
 
 		_protocolConverter->ConvertSnapshot(newSnapOutProto, *newSnap);
 		_outMsg.WriteDeltaPlayer(oldSnap ? GetPlayerState(&oldSnapOutProto, _outProtocol) : NULL, GetPlayerState(&newSnapOutProto, _outProtocol));
-		EmitPacketEntities(deltaNum ? &oldSnapOutProto : NULL, &newSnapOutProto);
+		EmitPacketEntities(oldSnap ? &oldSnapOutProto : NULL, &newSnapOutProto);
 
+		_outLastSnapshotMessageNum = newSnap->messageNum;
 		++_outSnapshotsWritten;
 	}
 
